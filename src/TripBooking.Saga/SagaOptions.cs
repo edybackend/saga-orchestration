@@ -7,7 +7,7 @@ public sealed class SagaOptions
     public const string SectionName = "Saga";
 
     /// <summary>Technical failures tolerated on a reserve step before giving up and compensating.</summary>
-    public int MaxAttempts { get; set; } = 4;
+    public int MaxAttempts { get; set; } = 5;
 
     /// <summary>Technical failures tolerated on a cancel before the trip needs an operator.</summary>
     public int MaxCompensationAttempts { get; set; } = 20;
