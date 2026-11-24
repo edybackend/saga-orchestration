@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: .NET build & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet restore
+      - run: dotnet format --verify-no-changes --no-restore
+      # Warnings are errors (Directory.Build.props), so analyzers and code style gate the build.
+      - run: dotnet build --no-restore -c Release
+      # Saga state machine, idempotent participants, end to end with failure injection, restart recovery, architecture.
+      - run: dotnet test --no-build -c Release
+
+  compose:
+    name: Four services, one of them down (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: [dotnet]
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose build
+      - name: Start the orchestrator and the three participants
+        run: |
+          docker compose up -d
+          for port in 8080 8081 8082 8083; do
+            for i in $(seq 1 60); do curl -fs http://localhost:$port/health && break; sleep 2; done
+          done
+          curl -fsL http://localhost:8080/scalar | grep -qi 'scalar'
+      - name: Sample trips end Completed, Completed and Compensated
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do [ "$(curl -fs http://localhost:8080/api/trips | jq '[.[] | select(.status == "Running" or .status == "Compensating")] | length')" -eq 0 ] && break; sleep 2; done
+          curl -fs http://localhost:8080/api/trips | jq -c '[.[].status] | sort' | tee statuses.json
+          [ "$(cat statuses.json)" = '["Compensated","Completed","Completed"]' ]
+      - name: With the car service stopped, a trip is compensated and nothing stays booked
+        run: |
+          set -euo pipefail
+          date=$(date -u -d '+40 days' +%F)
+          docker compose stop cars
+          id=$(curl -fs -X POST http://localhost:8080/api/trips -H 'content-type: application/json' \
+            -d "{\"customerEmail\":\"ci@example.com\",\"origin\":\"GRU\",\"destination\":\"SSA\",\"departureDate\":\"$date\",\"nights\":2}" | jq -r .id)
+          for i in $(seq 1 60); do [ "$(curl -fs http://localhost:8080/api/trips/$id | jq -r .status)" = "Compensating" ] && break; sleep 1; done
+          docker compose start cars   # the cancel of the car (outcome unknown) needs the service back
+          for i in $(seq 1 60); do [ "$(curl -fs http://localhost:8080/api/trips/$id | jq -r .status)" = "Compensated" ] && break; sleep 2; done
+          curl -fs http://localhost:8080/api/trips/$id | jq -c '{status, failureReason, steps: [.steps[].status]}'
+          [ "$(curl -fs http://localhost:8080/api/trips/$id | jq -r .status)" = "Compensated" ]
+          [ "$(curl -fs http://localhost:8081/api/flights/availability/GRU-SSA@$date | jq .reserved)" -eq 0 ]
+          [ "$(curl -fs http://localhost:8082/api/hotels/availability/SSA@$date | jq .reserved)" -eq 0 ]
+      - if: always()
+        run: docker compose logs orchestrator && docker compose down -v
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The CLI scans the full history; the action builds a "<first>^..HEAD" range that fails on a root commit.
+      - name: Scan full git history with gitleaks
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --verbose .
