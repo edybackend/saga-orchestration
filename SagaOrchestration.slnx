@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TripBooking.Api/TripBooking.Api.csproj" />
+    <Project Path="src/TripBooking.Contracts/TripBooking.Contracts.csproj" />
+    <Project Path="src/TripBooking.Participants/TripBooking.Participants.csproj" />
+    <Project Path="src/TripBooking.Saga/TripBooking.Saga.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TripBooking.ArchitectureTests/TripBooking.ArchitectureTests.csproj" />
+    <Project Path="tests/TripBooking.IntegrationTests/TripBooking.IntegrationTests.csproj" />
+    <Project Path="tests/TripBooking.UnitTests/TripBooking.UnitTests.csproj" />
+  </Folder>
+</Solution>
