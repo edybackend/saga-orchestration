@@ -1,0 +1,54 @@
+### Trip booking saga — try it from VS Code (REST Client) or Rider/Visual Studio.
+### Run it first: `docker compose up --build` (four services) or `dotnet run --project src/TripBooking.Api` (all in one).
+@api = http://localhost:8080/api
+# With Docker Compose the participants also answer on their own ports:
+@cars = http://localhost:8083/api/cars
+# With `dotnet run` everything is on 8080:
+# @cars = http://localhost:8080/api/cars
+
+### 1. Book a trip — 202 Accepted, the saga runs in the background
+# @name book
+POST {{api}}/trips
+Content-Type: application/json
+
+{ "customerEmail": "dana@example.com", "origin": "GRU", "destination": "SSA", "departureDate": "2027-01-15", "nights": 4 }
+
+### 2. Status, steps and the timeline of every call
+GET {{api}}/trips/{{book.response.body.id}}
+
+### 3. Make the car service fail twice: the saga retries and still completes
+PUT {{cars}}/chaos
+Content-Type: application/json
+
+{ "failNextCalls": 2, "failAfterProcessing": false, "delayMs": 0 }
+
+###
+POST {{api}}/trips
+Content-Type: application/json
+
+{ "customerEmail": "eli@example.com", "origin": "GRU", "destination": "FOR", "departureDate": "2027-01-15", "nights": 2 }
+
+### 4. The car service reserves but the answer is lost: the retry finds the same reservation
+PUT {{cars}}/chaos
+Content-Type: application/json
+
+{ "failNextCalls": 1, "failAfterProcessing": true, "delayMs": 0 }
+
+### 5. The car service stays down: car (unknown), hotel and flight are cancelled in reverse order
+###    (with Docker Compose you can also run `docker compose stop cars`)
+PUT {{cars}}/chaos
+Content-Type: application/json
+
+{ "failNextCalls": 5, "failAfterProcessing": false, "delayMs": 0 }
+
+###
+POST {{api}}/trips
+Content-Type: application/json
+
+{ "customerEmail": "fabio@example.com", "origin": "GRU", "destination": "POA", "departureDate": "2027-01-15", "nights": 3 }
+
+### 6. Capacity of a participant
+GET {{cars}}/availability/POA@2027-01-15
+
+### 7. All trips
+GET {{api}}/trips
