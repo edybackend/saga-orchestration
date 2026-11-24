@@ -1,0 +1,55 @@
+name: saga-orchestration
+
+# Four services from one image. The orchestrator calls the participants over the network, each with its own database.
+x-service: &service
+  build:
+    context: .
+  image: saga-orchestration:local
+  restart: unless-stopped
+
+services:
+  orchestrator:
+    <<: *service
+    environment:
+      Role: Orchestrator
+      Saga__Participants__Flights: http://flights:8080
+      Saga__Participants__Hotels: http://hotels:8080
+      Saga__Participants__Cars: http://cars:8080
+    ports:
+      - "8080:8080" # API reference: http://localhost:8080/scalar
+    volumes:
+      - trips-data:/app/data
+    depends_on: [flights, hotels, cars]
+
+  flights:
+    <<: *service
+    environment:
+      Role: Flights
+    ports:
+      - "8081:8080" # http://localhost:8081/scalar
+    volumes:
+      - flights-data:/app/data
+
+  hotels:
+    <<: *service
+    environment:
+      Role: Hotels
+    ports:
+      - "8082:8080" # http://localhost:8082/scalar
+    volumes:
+      - hotels-data:/app/data
+
+  cars:
+    <<: *service
+    environment:
+      Role: Cars
+    ports:
+      - "8083:8080" # chaos: PUT http://localhost:8083/api/cars/chaos
+    volumes:
+      - cars-data:/app/data
+
+volumes:
+  trips-data:
+  flights-data:
+  hotels-data:
+  cars-data:
