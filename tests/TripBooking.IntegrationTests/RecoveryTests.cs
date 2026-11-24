@@ -8,7 +8,8 @@ public sealed class RecoveryTests : IDisposable
     public async Task A_trip_interrupted_by_a_restart_is_finished_by_the_next_process()
     {
         Guid tripId;
-        using (var first = new SagaApiFactory(_databases))
+        // Plenty of attempts, so the first process is still retrying (not compensating) when it stops.
+        using (var first = new SagaApiFactory(_databases, maxAttempts: 10_000))
         using (var client = first.CreateClient())
         {
             await client.ChaosAsync("cars", failNextCalls: 1_000); // the car service is down…
@@ -22,7 +23,9 @@ public sealed class RecoveryTests : IDisposable
             Assert.Equal("Running", (await client.TripAsync(tripId)).Status);
         } // …and the process stops in the middle of the trip.
 
-        using var second = new SagaApiFactory(_databases); // a new process on the same databases, car service healthy
+        // A new process on the same databases, car service healthy. Its first calls can come before its own test
+        // server is up (they fail as transient), so it also gets room to retry instead of compensating.
+        using var second = new SagaApiFactory(_databases, maxAttempts: 10_000);
         using var restarted = second.CreateClient();
 
         var trip = await restarted.FinishedTripAsync(tripId);

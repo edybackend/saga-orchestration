@@ -29,7 +29,7 @@ public sealed class TestDatabases : IDisposable
 /// The whole system in one test server (role All). The orchestrator's HTTP calls to the participants go through
 /// the test server's handler, so they are real HTTP requests through the real endpoints — just without a socket.
 /// </summary>
-public sealed class SagaApiFactory(TestDatabases databases) : WebApplicationFactory<Program>
+public sealed class SagaApiFactory(TestDatabases databases, int maxAttempts = 4) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -40,7 +40,7 @@ public sealed class SagaApiFactory(TestDatabases databases) : WebApplicationFact
         }
 
         builder.UseSetting("Samples:Seed", "false");
-        builder.UseSetting("Saga:MaxAttempts", "4");
+        builder.UseSetting("Saga:MaxAttempts", maxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
         builder.UseSetting("Saga:MaxCompensationAttempts", "50");
         builder.UseSetting("Saga:BaseBackoff", "00:00:00.020");
         builder.UseSetting("Saga:MaxBackoff", "00:00:00.100");
