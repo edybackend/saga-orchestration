@@ -14,8 +14,6 @@ As partes difíceis são as que uma demo do caminho feliz pula:
 
 O CI derruba um dos serviços no meio da saga a cada push.
 
-Pequeno de propósito: dá para ler em uns 15 minutos e subir com um comando.
-
 ## Como rodar
 
 Requisito: Docker.
@@ -47,7 +45,7 @@ Há também o roteiro [`requests.http`](requests.http).
 <summary>Sem Docker (.NET 10 SDK, tudo num processo)</summary>
 
 ```bash
-dotnet run --project src/TripBooking.Api   # http://localhost:8080/scalar — mesmos endpoints; participantes em /api/flights, /api/hotels, /api/cars
+dotnet run --project src/TripBooking.Api   # http://localhost:8080/scalar: mesmos endpoints; participantes em /api/flights, /api/hotels, /api/cars
 ```
 </details>
 
@@ -69,7 +67,7 @@ sequenceDiagram
     Note over O: Compensating (ordem reversa)
     O->>F: POST reservations/{trip}-flight/cancel
     F-->>O: 200 Cancelled
-    Note over O: Compensated — o assento voltou
+    Note over O: Compensated: o assento voltou
 ```
 
 1. `POST /api/trips` grava a saga e devolve `202`. Um worker em segundo plano faz as chamadas.
@@ -171,16 +169,9 @@ dotnet test   # 34 testes: máquina de estados, participantes, saga de ponta a p
 - **Sem reserva provisória.** Um voo reservado fica reservado até a saga cancelar. Sistemas reais costumam usar reservas que expiram sozinhas (com TTL), para uma saga travada não segurar estoque para sempre.
 - **A compensação pode ser visível.** Entre "voo reservado" e "voo cancelado", alguém pode ter visto um assento a menos. Sagas trocam isolamento por disponibilidade; é o preço de não ter transação distribuída.
 
-## Engenharia assistida por IA
+## Trabalhando com um agente de IA
 
-Este projeto foi construído com o Claude Code sob controles explícitos de engenharia:
-
-- **Regras do projeto** ([`CLAUDE.md`](CLAUDE.md)) definem as fronteiras e as regras da saga que o agente segue.
-- **Hooks** ([`.claude/settings.json`](.claude/settings.json)) formatam cada mudança, bloqueiam edição de segredos e bancos, **bloqueiam I/O, `async` ou leitura de relógio na máquina de estados**, **bloqueiam remover ou renomear campos do contrato dos participantes** e rodam build e testes antes de a tarefa ser dada como pronta.
-- **Spec primeiro**: cada funcionalidade começa como especificação em [`specs/`](specs), com critérios de aceite.
-- **Os mesmos portões de qualidade para cada linha**: o CI exige zero avisos, formatação, testes de unidade/integração/arquitetura, uma execução com quatro serviços e um deles parado no meio da saga, e varredura de segredos.
-
-A arquitetura é minha, e eu reviso cada mudança.
+As decisões da saga ficam numa máquina de estados pura, e mantê-la pura é o que a torna testável. Quando trabalho com um agente de IA aqui, um hook em [`.claude/`](.claude) recusa I/O, `async` ou leitura de relógio em `Saga/Domain`, e outro protege o contrato HTTP compartilhado com os participantes. O [`CLAUDE.md`](CLAUDE.md) tem as regras da saga.
 
 ## Licença
 

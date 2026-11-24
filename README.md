@@ -14,8 +14,6 @@ The hard parts are the ones a happy-path demo skips:
 
 CI stops one of the services mid-saga on every push.
 
-Small on purpose: it can be read in about 15 minutes and started with one command.
-
 ## Quick start
 
 Requirements: Docker.
@@ -47,7 +45,7 @@ There is also a [`requests.http`](requests.http) walk-through.
 <summary>Without Docker (.NET 10 SDK, everything in one process)</summary>
 
 ```bash
-dotnet run --project src/TripBooking.Api   # http://localhost:8080/scalar — same endpoints, participants on /api/flights, /api/hotels, /api/cars
+dotnet run --project src/TripBooking.Api   # http://localhost:8080/scalar: same endpoints, participants on /api/flights, /api/hotels, /api/cars
 ```
 </details>
 
@@ -69,7 +67,7 @@ sequenceDiagram
     Note over O: Compensating (reverse order)
     O->>F: POST reservations/{trip}-flight/cancel
     F-->>O: 200 Cancelled
-    Note over O: Compensated — the seat is free again
+    Note over O: Compensated: the seat is free again
 ```
 
 1. `POST /api/trips` saves the saga and returns `202`. A background worker does the calls.
@@ -171,16 +169,9 @@ dotnet test   # 34 tests: state machine, participants, saga end to end with inje
 - **No reservation holds.** A booked flight stays booked until the saga cancels it. Real systems often use holds that expire on their own (a reservation with a TTL), so a stuck saga cannot hold inventory forever.
 - **Compensation can be visible.** Between "flight booked" and "flight cancelled", someone may have seen one seat fewer. Sagas trade isolation for availability; that is the price of not having a distributed transaction.
 
-## AI-Assisted Engineering
+## Working with an AI agent
 
-This project was built with Claude Code under explicit engineering controls:
-
-- **Project rules** ([`CLAUDE.md`](CLAUDE.md)) define the boundaries and the saga rules the agent must follow.
-- **Hooks** ([`.claude/settings.json`](.claude/settings.json)) format every change, block edits to secrets and databases, **block I/O, `async` or clock reads in the saga state machine**, **block removing or renaming fields of the participant contract**, and run the build and tests before a task is considered done.
-- **Spec-first**: each feature starts as a spec in [`specs/`](specs) with acceptance criteria.
-- **Same quality gates for every line**: CI enforces warnings as errors, formatting, unit/integration/architecture tests, a four-service run with a service stopped mid-saga, and secret scanning.
-
-I own the architecture and review every change.
+The saga's decisions live in a pure state machine, and keeping it pure is what makes it testable. When I work with an AI agent here, a hook in [`.claude/`](.claude) refuses I/O, `async` or clock reads in `Saga/Domain`, and another guards the HTTP contract shared with the participants. [`CLAUDE.md`](CLAUDE.md) has the saga rules.
 
 ## License
 
